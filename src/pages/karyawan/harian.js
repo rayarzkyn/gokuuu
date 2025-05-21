@@ -1,87 +1,114 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { auth } from '../../firebase/config';
-
-const hargaProduk = {
-  "Kartu Axis 10GB": 15000,
-  "Kartu Smartfren 8GB": 20000,
-  "Kartu Telkomsel 20GB": 22000,
-  "Kartu Telkomsel 30GB": 30000,
-  "Kartu Tri 5GB": 15000,
-  "Kartu XL 5GB": 20000,
-  "Voucher IM3 4GB": 12000,
-  "Voucher IM3 7GB": 20000,
-  "Voucher IM3 8GB": 25000,
-  "Voucher IM3 12GB": 40000,
-  "Voucher IM3 20GB": 60000,
-  "Voucher Telkomsel 1.5GB": 9000,
-  "Voucher Telkomsel 2.5GB": 12000,
-  "Voucher Telkomsel 3.5GB": 15000,
-  "Voucher Telkomsel 4.5GB": 20000,
-  "Voucher Telkomsel 5.5GB": 25000,
-  "Voucher Telkomsel 12GB": 55000,
-};
+import { auth, db } from '../../firebase/config';
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc
+} from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function StokHarian() {
   const router = useRouter();
   const [tanggal, setTanggal] = useState('');
-  const [userEmail, setUserEmail] = useState(''); // ubah dari userName jadi userEmail
-  const [form, setForm] = useState(
-    Object.keys(hargaProduk).reduce((acc, produk) => {
-      acc[produk] = {
-        jumlahStokAwal: 0,
-        jumlahStokAkhir: 0,
-        jumlahTerjual: 0,
-        total: 0,
-      };
-      return acc;
-    }, {})
-  );
+  const [userEmail, setUserEmail] = useState('');
+  const [produkList, setProdukList] = useState([]);
+  const [form, setForm] = useState({});
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (user) {
-      setUserEmail(user.email); // simpan email pengguna
-    } else {
-      setUserEmail('Tidak diketahui');
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) setUserEmail(user.email);
+      else setUserEmail('Tidak diketahui');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const produkCollection = collection(db, 'produkHarga');
+    const q = query(produkCollection, orderBy('nama'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({
+        id: doc.id,
+        nama: doc.data().nama,
+        harga: Number(doc.data().harga) || 0,
+      }));
+      setProdukList(list);
+
+      setForm(prevForm => {
+        const updatedForm = { ...prevForm };
+        list.forEach(prod => {
+          if (!updatedForm[prod.nama]) {
+            updatedForm[prod.nama] = {
+              harga: prod.harga,
+              jumlahStokAwal: 0,
+              jumlahStokAkhir: 0,
+              jumlahTerjual: 0,
+              total: 0,
+            };
+          }
+        });
+        return updatedForm;
+      });
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleChange = (e, produk, type) => {
-    const value = parseInt(e.target.value) || 0;
-    const updatedForm = { ...form };
+    const value = Math.max(0, parseInt(e.target.value) || 0);
+    setForm(prevForm => {
+      const updated = { ...prevForm };
+      if (type === 'stokAwal') updated[produk].jumlahStokAwal = value;
+      else if (type === 'stokAkhir') updated[produk].jumlahStokAkhir = value;
 
-    if (type === 'stokAwal') {
-      updatedForm[produk].jumlahStokAwal = value;
-    } else if (type === 'stokAkhir') {
-      updatedForm[produk].jumlahStokAkhir = value;
-    }
+      const jumlahTerjual = Math.max(0, updated[produk].jumlahStokAwal - updated[produk].jumlahStokAkhir);
+      const hargaProd = produkList.find(p => p.nama === produk)?.harga || 0;
 
-    updatedForm[produk].jumlahTerjual =
-      updatedForm[produk].jumlahStokAwal - updatedForm[produk].jumlahStokAkhir;
-    updatedForm[produk].total = hargaProduk[produk] * updatedForm[produk].jumlahTerjual;
+      updated[produk].jumlahTerjual = jumlahTerjual;
+      updated[produk].harga = hargaProd;
+      updated[produk].total = jumlahTerjual * hargaProd;
 
-    setForm(updatedForm);
+      return updated;
+    });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!tanggal) {
       alert("Tanggal harus diisi!");
       return;
     }
 
-    // Simpan data ke localStorage
+    const formattedData = Object.keys(form).map(namaProduk => ({
+      namaProduk,
+      harga: form[namaProduk].harga || 0,
+      jumlahStokAwal: form[namaProduk].jumlahStokAwal || 0,
+      jumlahStokAkhir: form[namaProduk].jumlahStokAkhir || 0,
+      jumlahTerjual: form[namaProduk].jumlahTerjual || 0,
+      total: form[namaProduk].total || 0,
+    }));
+
     const data = {
       tanggal,
-      formData: form,
+      userEmail,
+      produkData: formattedData,
+      createdAt: new Date(),
     };
 
-    localStorage.setItem('stokHarianData', JSON.stringify(data));
-    localStorage.setItem('userEmail', userEmail); // pastikan nilai userEmail tersimpan
+    try {
+      // Simpan data ke Firestore
+      await addDoc(collection(db, 'stokHarian'), data);
 
-    router.push('/karyawan/rekap-harian');
+      // Simpan data juga ke localStorage supaya bisa dibawa ke halaman rekap-harian.js
+      localStorage.setItem('stokHarianData', JSON.stringify({ tanggal, produkData: formattedData }));
+
+      router.push('/karyawan/rekap-harian');
+    } catch (error) {
+      console.error("Gagal menyimpan ke Firestore:", error);
+      alert("Terjadi kesalahan saat menyimpan. Silakan coba lagi.");
+    }
   };
 
   return (
@@ -96,7 +123,7 @@ export default function StokHarian() {
               <input
                 type="date"
                 value={tanggal}
-                onChange={(e) => setTanggal(e.target.value)}
+                onChange={e => setTanggal(e.target.value)}
                 required
                 className="w-full px-4 py-2 rounded bg-white text-black"
               />
@@ -117,6 +144,7 @@ export default function StokHarian() {
               <thead className="bg-gray-800">
                 <tr>
                   <th className="px-4 py-2">Nama Produk</th>
+                  <th className="px-4 py-2">Harga</th>
                   <th className="px-4 py-2">Stok Awal</th>
                   <th className="px-4 py-2">Stok Akhir</th>
                   <th className="px-4 py-2">Jumlah Terjual</th>
@@ -124,27 +152,37 @@ export default function StokHarian() {
                 </tr>
               </thead>
               <tbody>
-                {Object.keys(hargaProduk).map((produk) => (
-                  <tr key={produk} className="bg-black/20 hover:bg-black/30">
-                    <td className="px-4 py-2 font-medium">{produk}</td>
+                {produkList.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-4">Loading produk...</td>
+                  </tr>
+                )}
+                {produkList.map(prod => (
+                  <tr key={prod.id} className="bg-black/20 hover:bg-black/30">
+                    <td className="px-4 py-2 font-medium">{prod.nama}</td>
+                    <td className="px-4 py-2">Rp {prod.harga.toLocaleString()}</td>
                     <td className="px-4 py-2">
                       <input
                         type="number"
-                        value={form[produk].jumlahStokAwal}
-                        onChange={(e) => handleChange(e, produk, 'stokAwal')}
+                        min="0"
+                        value={form[prod.nama]?.jumlahStokAwal || 0}
+                        onChange={e => handleChange(e, prod.nama, 'stokAwal')}
                         className="w-full px-2 py-1 rounded bg-white text-black"
                       />
                     </td>
                     <td className="px-4 py-2">
                       <input
                         type="number"
-                        value={form[produk].jumlahStokAkhir}
-                        onChange={(e) => handleChange(e, produk, 'stokAkhir')}
+                        min="0"
+                        value={form[prod.nama]?.jumlahStokAkhir || 0}
+                        onChange={e => handleChange(e, prod.nama, 'stokAkhir')}
                         className="w-full px-2 py-1 rounded bg-white text-black"
                       />
                     </td>
-                    <td className="px-4 py-2">{form[produk].jumlahTerjual}</td>
-                    <td className="px-4 py-2">Rp {form[produk].total.toLocaleString()}</td>
+                    <td className="px-4 py-2">{form[prod.nama]?.jumlahTerjual || 0}</td>
+                    <td className="px-4 py-2">
+                      Rp {(form[prod.nama]?.total || 0).toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>

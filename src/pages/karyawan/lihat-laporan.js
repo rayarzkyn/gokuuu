@@ -22,11 +22,23 @@ export default function LihatLaporan() {
   const fetchData = async () => {
     const q = query(collection(db, 'rekapHarian'));
     const snapshot = await getDocs(q);
-    const data = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      tanggal: doc.data().tanggal?.toDate?.() ?? doc.data().tanggal,
-    }));
+    const data = snapshot.docs.map((doc) => {
+      const docData = doc.data();
+
+      const harga = Number(docData.harga || 0);
+      const jumlahTerjual = Number(docData.jumlahTerjual || 0);
+      const total = jumlahTerjual * harga;
+
+      return {
+        id: doc.id,
+        produk: docData.produk || 'Tidak diketahui',
+        jumlahTerjual,
+        harga,
+        total,
+        tanggal: docData.tanggal?.toDate?.() ?? docData.tanggal,
+        emailPengguna: docData.emailPengguna || 'Tidak diketahui',
+      };
+    });
 
     const sorted = data.sort((a, b) => {
       const dateA = new Date(a.tanggal);
@@ -60,13 +72,19 @@ export default function LihatLaporan() {
 
   const handleUpdate = async () => {
     const docRef = doc(db, 'rekapHarian', editData.id);
+    const jumlahTerjual = Number(editData.jumlahTerjual);
+    const harga = Number(editData.harga);
+    const total = jumlahTerjual * harga;
+
     await updateDoc(docRef, {
       produk: editData.produk,
-      jumlahTerjual: Number(editData.jumlahTerjual),
-      harga: Number(editData.harga),
-      total: Number(editData.jumlahTerjual) * Number(editData.harga),
+      jumlahTerjual,
+      harga,
+      total,
       tanggal: Timestamp.fromDate(new Date(editData.tanggal)),
+      emailPengguna: editData.emailPengguna || 'Tidak diketahui',
     });
+
     setEditData(null);
     fetchData();
   };
@@ -117,6 +135,7 @@ export default function LihatLaporan() {
                         <th className="px-4 py-3">Jumlah Terjual</th>
                         <th className="px-4 py-3">Harga</th>
                         <th className="px-4 py-3">Total</th>
+                        <th className="px-4 py-3">Email Pengguna</th>
                         <th className="px-4 py-3">Aksi</th>
                       </tr>
                     </thead>
@@ -125,8 +144,13 @@ export default function LihatLaporan() {
                         <tr key={item.id} className="border-b border-gray-800 hover:bg-gray-900">
                           <td className="px-4 py-3">{item.produk}</td>
                           <td className="px-4 py-3">{item.jumlahTerjual}</td>
-                          <td className="px-4 py-3">Rp{item.harga.toLocaleString()}</td>
-                          <td className="px-4 py-3">Rp{item.total.toLocaleString()}</td>
+                          <td className="px-4 py-3">
+                            Rp{isNaN(item.harga) ? '0' : item.harga.toLocaleString('id-ID')}
+                          </td>
+                          <td className="px-4 py-3">
+                            Rp{isNaN(item.total) ? '0' : item.total.toLocaleString('id-ID')}
+                          </td>
+                          <td className="px-4 py-3">{item.emailPengguna}</td>
                           <td className="px-4 py-3 flex space-x-2">
                             <button
                               onClick={() => handleEditClick(item)}
@@ -191,6 +215,17 @@ export default function LihatLaporan() {
                   value={editData.harga}
                   onChange={handleEditChange}
                   className="w-full p-2 border border-gray-300 rounded"
+                />
+              </label>
+
+              <label className="block">
+                Email Pengguna:
+                <input
+                  name="emailPengguna"
+                  value={editData.emailPengguna || ''}
+                  onChange={handleEditChange}
+                  className="w-full p-2 border border-gray-300 rounded"
+                  placeholder="Email pengguna"
                 />
               </label>
 

@@ -1,75 +1,79 @@
-// src/pages/karyawan/rekap-harian.js
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { db } from '../../firebase/config';
 import { addDoc, collection } from 'firebase/firestore';
-import { useRouter } from 'next/router';
-
-const hargaProduk = {
-  "Kartu Axis 10GB": 15000,
-  "Kartu Smartfren 8GB": 20000,
-  "Kartu Telkomsel 20GB": 22000,
-  "Kartu Telkomsel 30GB": 30000,
-  "Kartu Tri 5GB": 15000,
-  "Kartu XL 5GB": 20000,
-  "Voucher IM3 4GB": 12000,
-  "Voucher IM3 7GB": 20000,
-  "Voucher IM3 8GB": 25000,
-  "Voucher IM3 12GB": 40000,
-  "Voucher IM3 20GB": 60000,
-  "Voucher Telkomsel 1.5GB": 9000,
-  "Voucher Telkomsel 2.5GB": 12000,
-  "Voucher Telkomsel 3.5GB": 15000,
-  "Voucher Telkomsel 4.5GB": 20000,
-  "Voucher Telkomsel 5.5GB": 25000,
-  "Voucher Telkomsel 12GB": 55000,
-};
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 export default function RekapHarianKaryawan() {
   const router = useRouter();
-
-  const [form, setForm] = useState({});
+  const [produkData, setProdukData] = useState([]);
   const [tanggal, setTanggal] = useState('');
   const [emailPengguna, setEmailPengguna] = useState('');
 
+  // Ambil data dari localStorage + user email dari Firebase Auth
   useEffect(() => {
     const storedData = JSON.parse(localStorage.getItem('stokHarianData'));
     if (storedData) {
       setTanggal(storedData.tanggal);
-      setForm(storedData.formData);
+      setProdukData(storedData.produkData || []);
     }
 
-    const email = localStorage.getItem('userEmail'); // Ambil email dari localStorage
-    setEmailPengguna(email || 'Tidak diketahui');
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setEmailPengguna(user.email);
+      } else {
+        setEmailPengguna('Tidak diketahui');
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try {
-      for (let produk in form) {
-        if (form[produk].jumlahTerjual > 0) {
-          const harga = hargaProduk[produk] || 0;
-          const jumlahTerjual = form[produk].jumlahTerjual;
-          const total = jumlahTerjual * harga;
+    const dataTerjual = produkData.filter((data) => data.jumlahTerjual > 0);
 
-          await addDoc(collection(db, 'rekapHarian'), {
-            tanggal: new Date(tanggal), // ✅ Simpan tanggal sesuai input user
-            produk,
-            jumlahTerjual,
-            total,
-            harga,
-            emailPengguna, // ✅ Simpan email pengguna
-          });
-        }
+    if (dataTerjual.length === 0) {
+      alert('Tidak ada produk yang terjual untuk dikirim.');
+      return;
+    }
+
+    try {
+      // Simpan ke rekapHarian
+      for (let data of dataTerjual) {
+        const harga = Number(data.harga) || 0;
+        const total = Number(data.jumlahTerjual) * harga;
+
+        await addDoc(collection(db, 'rekapHarian'), {
+          tanggal: new Date(tanggal),
+          produk: data.namaProduk,
+          jumlahTerjual: data.jumlahTerjual,
+          harga,
+          total,
+          emailPengguna,
+        });
       }
+
+      // Simpan ke stokHarian agar bisa dibaca oleh kepala/rekap.js
+      await addDoc(collection(db, 'stokHarian'), {
+        tanggal,
+        produkData: produkData.map(p => ({
+          namaProduk: p.namaProduk,
+          jumlahStokAwal: p.jumlahStokAwal || 0,
+          jumlahStokAkhir: p.jumlahStokAkhir || 0,
+        })),
+      });
+
+      localStorage.removeItem('stokHarianData');
       router.push('/karyawan');
     } catch (error) {
-      console.error("Error saving data to Firestore: ", error);
+      console.error('Gagal menyimpan data rekap:', error);
+      alert('Gagal menyimpan data. Silakan coba lagi.');
     }
   };
 
-  // Format tanggal ke lokal Indonesia
   const formatTanggalLokal = (tglStr) => {
     try {
       return new Date(tglStr).toLocaleDateString('id-ID', {
@@ -98,17 +102,24 @@ export default function RekapHarianKaryawan() {
                 <tr>
                   <th className="px-4 py-2">Nama Produk</th>
                   <th className="px-4 py-2">Jumlah Terjual</th>
+                  <th className="px-4 py-2">Harga</th>
                   <th className="px-4 py-2">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {Object.keys(form).map((produk) => (
-                  <tr key={produk}>
-                    <td className="px-4 py-2">{produk}</td>
-                    <td className="px-4 py-2">{form[produk].jumlahTerjual}</td>
-                    <td className="px-4 py-2">Rp {form[produk].total.toLocaleString()}</td>
-                  </tr>
-                ))}
+                {produkData.filter(prod => prod.jumlahTerjual > 0).map((produk, index) => {
+                  const harga = Number(produk.harga) || 0;
+                  const total = Number(produk.jumlahTerjual) * harga;
+
+                  return (
+                    <tr key={index}>
+                      <td className="px-4 py-2">{produk.namaProduk}</td>
+                      <td className="px-4 py-2">{produk.jumlahTerjual}</td>
+                      <td className="px-4 py-2">Rp {harga.toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2">Rp {total.toLocaleString('id-ID')}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

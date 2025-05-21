@@ -14,19 +14,24 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
+    setError(""); // Reset error before attempting login
 
     try {
+      // Authenticate user with Firebase
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userRef = doc(db, "users", userCredential.user.uid);
+      const userRef = doc(db, "users", userCredential.user.uid); // Refer to the user document in Firestore
       const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
-        const role = userSnap.data().role;
+        const role = userSnap.data().role; // Get the role from the Firestore document
+
+        // Check the role and redirect accordingly
         if (role === "karyawan") {
           router.push("/karyawan");
         } else if (role === "kepala_toko") {
           router.push("/kepala");
+        } else if (role === "pelanggan") {
+          router.push("/pelanggan/dashboard"); // Redirect to pelanggan dashboard if role is pelanggan
         } else {
           setError("Role tidak dikenali.");
         }
@@ -96,8 +101,8 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="text-sm text-gray-300 mt-6 text-center">
-          Akun hanya dapat dibuat oleh kepala toko.
+        <p className="text-sm text-gray-100 mt-6 text-center">
+          Raya Rizkyana. All rights reserved.
         </p>
       </div>
     </div>
