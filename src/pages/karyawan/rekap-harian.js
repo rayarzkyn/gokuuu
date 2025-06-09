@@ -10,25 +10,28 @@ export default function RekapHarianKaryawan() {
   const [tanggal, setTanggal] = useState('');
   const [emailPengguna, setEmailPengguna] = useState('');
 
-  // Ambil data dari localStorage + user email dari Firebase Auth
   useEffect(() => {
     const storedData = JSON.parse(localStorage.getItem('stokHarianData'));
     if (storedData) {
       setTanggal(storedData.tanggal);
       setProdukData(storedData.produkData || []);
+      setEmailPengguna(storedData.userEmail || 'Tidak diketahui');
+    } else {
+      alert('Data stok harian tidak ditemukan, silakan input terlebih dahulu.');
+      router.push('/karyawan/harian');
     }
+  }, [router]);
 
+  useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && !emailPengguna) {
         setEmailPengguna(user.email);
-      } else {
-        setEmailPengguna('Tidak diketahui');
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [emailPengguna]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,7 +44,6 @@ export default function RekapHarianKaryawan() {
     }
 
     try {
-      // Simpan ke rekapHarian
       for (let data of dataTerjual) {
         const harga = Number(data.harga) || 0;
         const total = Number(data.jumlahTerjual) * harga;
@@ -53,20 +55,26 @@ export default function RekapHarianKaryawan() {
           harga,
           total,
           emailPengguna,
+          createdAt: new Date(),
         });
       }
 
-      // Simpan ke stokHarian agar bisa dibaca oleh kepala/rekap.js
       await addDoc(collection(db, 'stokHarian'), {
         tanggal,
         produkData: produkData.map(p => ({
           namaProduk: p.namaProduk,
           jumlahStokAwal: p.jumlahStokAwal || 0,
           jumlahStokAkhir: p.jumlahStokAkhir || 0,
+          jumlahTerjual: p.jumlahTerjual || 0,
+          harga: p.harga || 0,
+          total: p.total || 0,
         })),
+        emailPengguna,
+        createdAt: new Date(),
       });
 
       localStorage.removeItem('stokHarianData');
+      alert('Laporan berhasil dikirim!');
       router.push('/karyawan');
     } catch (error) {
       console.error('Gagal menyimpan data rekap:', error);

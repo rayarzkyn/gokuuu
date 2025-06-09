@@ -221,7 +221,7 @@ export default function Dashboard() {
       {/* Tentang Kami Section */}
       <section
         id="tentang"
-        className="bg-gradient-to-b from-gray-950 to-black text-gray-200 py-16 px-4"
+        className="bg-gradient-to-b from-gray-950 to-green-700 text-white-700 py-16 px-4"
       >
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">
           📌 Tentang Kami
@@ -241,10 +241,10 @@ export default function Dashboard() {
         </div>
       </section>
 
-       {/* Kontak Section */}
+      {/* Kontak Section */}
       <section
         id="contact"
-        className="bg-gradient-to-b from-black to-gray-900 text-white py-16 px-4"
+        className="bg-gradient-to-b from-green-700 to-gray-900 text-white py-16 px-4"
       >
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">
           📞 Kontak
@@ -265,8 +265,21 @@ export default function Dashboard() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-black text-center py-4 text-sm text-gray-400">
-        © {new Date().getFullYear()} Goku Komunika. All rights reserved.
+      <footer className="bg-black text-white py-5 text-center text-sm mt-auto">
+        <div className="container mx-auto px-6">
+          <p>&copy; {new Date().getFullYear()} Goku Komunika. All rights reserved.</p>
+          <p className="mt-2 text-sm">
+            Developed with by{' '}
+            <a
+              href="https://github.com/your-profile"
+              className="text-blue-500 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Raya Rizkyana
+            </a>
+          </p>
+        </div>
       </footer>
     </div>
   );

@@ -6,7 +6,9 @@ import {
   query,
   orderBy,
   onSnapshot,
-  addDoc
+  setDoc,
+  doc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -16,6 +18,8 @@ export default function StokHarian() {
   const [userEmail, setUserEmail] = useState('');
   const [produkList, setProdukList] = useState([]);
   const [form, setForm] = useState({});
+  const [showModal, setShowModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -74,11 +78,17 @@ export default function StokHarian() {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleConfirm = () => {
     if (!tanggal) {
       alert("Tanggal harus diisi!");
       return;
+    }
+
+    for (const namaProduk in form) {
+      if (form[namaProduk].jumlahStokAkhir > form[namaProduk].jumlahStokAwal) {
+        alert(`Stok akhir untuk produk "${namaProduk}" tidak boleh lebih besar dari stok awal.`);
+        return;
+      }
     }
 
     const formattedData = Object.keys(form).map(namaProduk => ({
@@ -90,25 +100,9 @@ export default function StokHarian() {
       total: form[namaProduk].total || 0,
     }));
 
-    const data = {
-      tanggal,
-      userEmail,
-      produkData: formattedData,
-      createdAt: new Date(),
-    };
-
-    try {
-      // Simpan data ke Firestore
-      await addDoc(collection(db, 'stokHarian'), data);
-
-      // Simpan data juga ke localStorage supaya bisa dibawa ke halaman rekap-harian.js
-      localStorage.setItem('stokHarianData', JSON.stringify({ tanggal, produkData: formattedData }));
-
-      router.push('/karyawan/rekap-harian');
-    } catch (error) {
-      console.error("Gagal menyimpan ke Firestore:", error);
-      alert("Terjadi kesalahan saat menyimpan. Silakan coba lagi.");
-    }
+    localStorage.setItem('stokHarianData', JSON.stringify({ tanggal, produkData: formattedData, userEmail }));
+    setShowModal(false);
+    router.push('/karyawan/rekap-harian');
   };
 
   return (
@@ -116,7 +110,13 @@ export default function StokHarian() {
       <div className="w-full max-w-6xl mx-auto bg-black/30 p-8 rounded-xl shadow-lg">
         <h1 className="text-2xl font-bold mb-6 text-center">Input Stok Harian</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            setShowModal(true);
+          }}
+          className="space-y-4"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium">Tanggal</label>
@@ -160,7 +160,7 @@ export default function StokHarian() {
                 {produkList.map(prod => (
                   <tr key={prod.id} className="bg-black/20 hover:bg-black/30">
                     <td className="px-4 py-2 font-medium">{prod.nama}</td>
-                    <td className="px-4 py-2">Rp {prod.harga.toLocaleString()}</td>
+                    <td className="px-4 py-2">Rp {prod.harga.toLocaleString('id-ID')}</td>
                     <td className="px-4 py-2">
                       <input
                         type="number"
@@ -181,7 +181,7 @@ export default function StokHarian() {
                     </td>
                     <td className="px-4 py-2">{form[prod.nama]?.jumlahTerjual || 0}</td>
                     <td className="px-4 py-2">
-                      Rp {(form[prod.nama]?.total || 0).toLocaleString()}
+                      Rp {(form[prod.nama]?.total || 0).toLocaleString('id-ID')}
                     </td>
                   </tr>
                 ))}
@@ -197,6 +197,29 @@ export default function StokHarian() {
           </button>
         </form>
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full text-black shadow-lg">
+            <h2 className="text-lg font-semibold mb-4">Konfirmasi Simpan Stok</h2>
+            <p className="mb-6">Apakah Anda yakin ingin melanjutkan dan menyimpan data stok harian?</p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+              >
+                Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

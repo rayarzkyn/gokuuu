@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { db } from '../../firebase/config';
 import {
   collection,
-  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -12,28 +12,8 @@ import {
   orderBy,
 } from 'firebase/firestore';
 
-// Produk harga default
-const hargaProduk = {
-  "Kartu Axis 10GB": 15000,
-  "Kartu Smartfren 8GB": 20000,
-  "Kartu Telkomsel 20GB": 22000,
-  "Kartu Telkomsel 30GB": 30000,
-  "Kartu Tri 5GB": 15000,
-  "Kartu XL 5GB": 20000,
-  "Voucher IM3 4GB": 12000,
-  "Voucher IM3 7GB": 20000,
-  "Voucher IM3 8GB": 25000,
-  "Voucher IM3 12GB": 40000,
-  "Voucher IM3 20GB": 60000,
-  "Voucher Telkomsel 1.5GB": 9000,
-  "Voucher Telkomsel 2.5GB": 12000,
-  "Voucher Telkomsel 3.5GB": 15000,
-  "Voucher Telkomsel 4.5GB": 20000,
-  "Voucher Telkomsel 5.5GB": 25000,
-  "Voucher Telkomsel 12GB": 55000,
-};
-
 export default function HargaProduk() {
+  const router = useRouter();
   const [produkList, setProdukList] = useState([]);
   const [nama, setNama] = useState('');
   const [harga, setHarga] = useState('');
@@ -46,7 +26,7 @@ export default function HargaProduk() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
       setProdukList(list);
     });
@@ -54,33 +34,41 @@ export default function HargaProduk() {
   }, []);
 
   const handleAdd = async () => {
-    if (!nama.trim() || !harga || isNaN(harga)) return alert('Nama dan harga harus valid');
-    if (editId) {
-      const prodDoc = doc(db, 'produkHarga', editId);
-      await updateDoc(prodDoc, {
-        nama,
-        harga: Number(harga)
-      });
-      setEditId(null);
-    } else {
-      await addDoc(produkCollection, {
-        nama,
-        harga: Number(harga)
-      });
+    if (!nama.trim() || !harga || isNaN(harga)) {
+      alert('Nama dan harga harus valid');
+      return;
     }
-    setNama('');
-    setHarga('');
+
+    const hargaNumber = Number(harga);
+
+    try {
+      if (editId) {
+        const prodDoc = doc(db, 'produkHarga', editId);
+        await updateDoc(prodDoc, { nama, harga: hargaNumber });
+      } else {
+        await addDoc(produkCollection, { nama, harga: hargaNumber });
+      }
+      setNama('');
+      setHarga('');
+      setEditId(null);
+    } catch (error) {
+      console.error("Terjadi kesalahan saat menyimpan data:", error);
+    }
   };
 
   const handleEdit = (prod) => {
     setNama(prod.nama);
-    setHarga(prod.harga);
+    setHarga(prod.harga.toString());
     setEditId(prod.id);
   };
 
   const handleDelete = async (id) => {
     if (confirm('Yakin hapus produk ini?')) {
-      await deleteDoc(doc(db, 'produkHarga', id));
+      try {
+        await deleteDoc(doc(db, 'produkHarga', id));
+      } catch (error) {
+        console.error("Gagal menghapus produk:", error);
+      }
     }
   };
 
@@ -90,92 +78,110 @@ export default function HargaProduk() {
     setEditId(null);
   };
 
-  const handleImportDefault = async () => {
-    const existingNames = new Set(produkList.map(p => p.nama));
-    const newEntries = Object.entries(hargaProduk).filter(
-      ([nama]) => !existingNames.has(nama)
-    );
-
-    for (const [nama, harga] of newEntries) {
-      await addDoc(produkCollection, { nama, harga });
-    }
-
-    alert(`${newEntries.length} produk berhasil ditambahkan!`);
-  };
-
   return (
-    <main className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
-        <h1 className="text-3xl font-bold mb-6 text-center">Kelola Harga Produk</h1>
+    <div className="relative min-h-screen flex flex-col bg-gradient-to-br from-blue-300 via-blue-700 to-purple-600">
+      {/* Tombol kembali di pojok kanan atas */}
+      <main className="flex-grow p-6 sm:p-8">
+        <div className="max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-lg">
+          <h1 className="text-3xl sm:text-4xl font-bold text-center text-blue-700 mb-6">
+            Kelola Harga Produk
+          </h1>
 
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-center">
-          <input
-            type="text"
-            placeholder="Nama Produk"
-            value={nama}
-            onChange={e => setNama(e.target.value)}
-            className="border rounded px-3 py-2 flex-grow"
-          />
-          <input
-            type="number"
-            placeholder="Harga Produk"
-            value={harga}
-            onChange={e => setHarga(e.target.value)}
-            className="border rounded px-3 py-2 w-32"
-          />
-          <button
-            onClick={handleAdd}
-            className="bg-green-600 text-white px-4 rounded hover:bg-green-700 transition"
-          >
-            {editId ? 'Update' : 'Tambah'}
-          </button>
-          {editId && (
+          <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-center">
+            <input
+              type="text"
+              placeholder="Nama Produk"
+              value={nama}
+              onChange={e => setNama(e.target.value)}
+              className="border rounded px-4 py-2 flex-grow focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+            <input
+              type="number"
+              placeholder="Harga Produk"
+              value={harga}
+              onChange={e => setHarga(e.target.value)}
+              className="border rounded px-4 py-2 w-full sm:w-36 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
             <button
-              onClick={handleCancel}
-              className="bg-gray-400 text-white px-4 rounded hover:bg-gray-500 transition"
+              onClick={handleAdd}
+              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
             >
-              Batal
+              {editId ? 'Update' : 'Tambah'}
             </button>
-          )}
-        </div>
-
-        <table className="w-full border-collapse border border-gray-300">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="border border-gray-300 px-4 py-2 text-left">Nama Produk</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">Harga</th>
-              <th className="border border-gray-300 px-4 py-2">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {produkList.length === 0 && (
-              <tr>
-                <td colSpan={3} className="text-center py-4">Belum ada produk.</td>
-              </tr>
+            {editId && (
+              <button
+                onClick={handleCancel}
+                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition"
+              >
+                Batal
+              </button>
             )}
-            {produkList.map(prod => (
-              <tr key={prod.id}>
-                <td className="border border-gray-300 px-4 py-2">{prod.nama}</td>
-                <td className="border border-gray-300 px-4 py-2">Rp {prod.harga.toLocaleString()}</td>
-                <td className="border border-gray-300 px-4 py-2 text-center space-x-2">
-                  <button
-                    onClick={() => handleEdit(prod)}
-                    className="bg-yellow-500 px-2 py-1 rounded text-white hover:bg-yellow-600 transition"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(prod.id)}
-                    className="bg-red-600 px-2 py-1 rounded text-white hover:bg-red-700 transition"
-                  >
-                    Hapus
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </main>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-blue-200 text-blue-800">
+                  <th className="border border-gray-300 px-4 py-2 text-left">Nama Produk</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Harga</th>
+                  <th className="border border-gray-300 px-4 py-2 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {produkList.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="text-center py-4">Belum ada produk.</td>
+                  </tr>
+                ) : (
+                  produkList.map(prod => (
+                    <tr key={prod.id} className="hover:bg-blue-50">
+                      <td className="border border-gray-300 px-4 py-2">{prod.nama}</td>
+                      <td className="border border-gray-300 px-4 py-2">Rp {prod.harga.toLocaleString()}</td>
+                      <td className="border border-gray-300 px-4 py-2 text-center space-x-2">
+                        <button
+                          onClick={() => handleEdit(prod)}
+                          className="bg-yellow-500 px-3 py-1 rounded text-white hover:bg-yellow-600 transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(prod.id)}
+                          className="bg-red-600 px-3 py-1 rounded text-white hover:bg-red-700 transition"
+                        >
+                          Hapus
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={() => router.push('/kepala')}
+              className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 transition"
+            >
+              Kembali ke Dashboard
+            </button>
+        </div>
+        </div>
+      </main>
+
+      <footer className="bg-black text-white py-6 text-center text-sm">
+        <p>&copy; {new Date().getFullYear()} Raya Rikyana. All rights reserved.</p>
+        <p className="mt-2 text-sm">
+          Developed with by{' '}
+          <a
+            href="https://github.com/your-profile"
+            className="text-blue-500 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Raya Rizkyana
+          </a>
+        </p>
+      </footer>
+    </div>
   );
 }

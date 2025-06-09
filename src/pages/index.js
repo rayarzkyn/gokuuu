@@ -103,11 +103,39 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-black text-gray-100 py-6 mt-auto">
-        <div className="container mx-auto px-6 text-center text-sm">
-          &copy; {new Date().getFullYear()} Raya Rizkyana. All rights reserved.
+      {/* Tentang Saya */}
+      <section id="about-me" className="py-16 bg-gradient-to-b from-white via-cyan-500 to-sky-400 text-gray-800">
+        <div className="container mx-auto px-6 text-center">
+          <h3 className="text-3xl sm:text-4xl font-bold mb-6">Tentang Saya</h3>
+          <div className="max-w-3xl mx-auto border border-white/30 bg-white/80 backdrop-blur rounded-xl p-6 shadow-lg text-center">
+            <img
+              src="/fotoprofil.jpg"
+              alt="Foto Profil"
+              className="w-40 h-40 object-cover rounded-full mx-auto mb-6"
+            />
+            <h4 className="text-xl font-semibold text-gray-800 mb-4">Nama: Raya Rizkyana</h4>
+      <p className="text-lg leading-relaxed text-justify">
+        Saya adalah seorang mahasiswa di Universitas Ma'soem Prodi Sistem Informasi semester 4. Selain itu, saya juga terlibat dalam berbagai proyek terkait pengembangan sistem informasi dan teknologi di dunia digital.
+        Di waktu luang, saya senang mengeksplorasi hal baru dalam dunia pemrograman dan terus berusaha mengembangkan diri di bidang ini.
+      </p>
+          </div>
         </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-black text-white py-6 text-center text-sm">
+        <p>&copy; {new Date().getFullYear()} Raya Rikyana. All rights reserved.</p>
+        <p className="mt-2 text-sm">
+          Developed with by{' '}
+          <a
+            href="https://github.com/your-profile"
+            className="text-blue-500 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Raya Rizkyana
+          </a>
+        </p>
       </footer>
     </div>
   );
